@@ -104,6 +104,12 @@ function setupEventListeners() {
     document.getElementById('composer-tweet').addEventListener('click', () => {
         tweetComposerText();
     });
+
+    // Export CSV Button
+    const exportCsvBtn = document.getElementById('export-csv-btn');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', exportToCSV);
+    }
 }
 
 // Fetch Notes from local backend API
@@ -296,6 +302,9 @@ function renderFeed() {
                     <div class="note-header">
                         <span class="badge ${badgeClass}">${update.type}</span>
                         <div class="note-actions">
+                            <button class="btn-action copy-card-btn" onclick="copyCardText('${escapeHtml(update.type)}', '${escapeHtml(dateRef)}', '${escapeHtml(update.text)}', this)" title="Copy note text to clipboard">
+                                ${icons.copy} Copy
+                            </button>
                             <button class="btn-action tweet-btn" onclick="composeSingle('${escapeHtml(update.type)}', '${escapeHtml(dateRef)}', '${escapeHtml(update.text)}', '${escapeHtml(day.link)}')">
                                 ${icons.twitter} Tweet
                             </button>
@@ -470,4 +479,55 @@ function escapeHtml(unsafe) {
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;")
         .replace(/\n/g, "\\n");
+}
+
+// Copy single release note card text to clipboard
+async function copyCardText(type, date, text, btnElement) {
+    const fullText = `📢 BigQuery [${type}] (${date}):\n${text}`;
+    const originalHTML = btnElement.innerHTML;
+    
+    try {
+        await navigator.clipboard.writeText(fullText);
+        btnElement.innerHTML = `${icons.check} Copied!`;
+        btnElement.style.borderColor = 'var(--color-feature)';
+        btnElement.style.color = 'var(--color-feature)';
+        
+        setTimeout(() => {
+            btnElement.innerHTML = originalHTML;
+            btnElement.style.borderColor = '';
+            btnElement.style.color = '';
+        }, 2000);
+    } catch (err) {
+        console.error("Card text copy failed: ", err);
+    }
+}
+
+// Export the filtered release notes as CSV
+function exportToCSV() {
+    if (appState.filteredNotes.length === 0) return;
+    
+    let csvRows = [];
+    // Header
+    csvRows.push(["Date", "Type", "Update Text", "Link"]);
+    
+    appState.filteredNotes.forEach(day => {
+        day.updates.forEach(update => {
+            csvRows.push([day.date, update.type, update.text, day.link]);
+        });
+    });
+    
+    // Format rows as CSV content
+    const csvContent = csvRows.map(row => 
+        row.map(value => `"${(value || '').replace(/"/g, '""')}"`).join(",")
+    ).join("\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `bigquery_release_notes_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
